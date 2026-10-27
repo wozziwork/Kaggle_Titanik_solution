@@ -1,5 +1,5 @@
 .venv
-data/
+data/gender_submission.csv
 .idea/
 AGENTS.MD
 .agents
