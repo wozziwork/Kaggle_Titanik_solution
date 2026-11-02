@@ -11,6 +11,7 @@
 После скачивания репозитория нужно открыть терминал в его корне - папке с `main.py` и `requirements.txt`.
 
 ```powershell
+python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt
 .\.venv\Scripts\python.exe main.py
 ```
