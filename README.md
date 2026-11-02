@@ -6,13 +6,11 @@
 
 ## Запуск
 
-Для запуска требуется **Python 3.11**. В `requirements.txt` указана CPU-сборка pytorch.
+Для запуска требуется **Python**. В `requirements.txt` указана CPU-сборка pytorch.
 
 После скачивания репозитория нужно открыть терминал в его корне - папке с `main.py` и `requirements.txt`.
 
 ```powershell
-py -3.11 -m venv .venv
-.\.venv\Scripts\python.exe -m pip install --upgrade pip
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt
 .\.venv\Scripts\python.exe main.py
 ```
