@@ -1,7 +1,7 @@
 import torch
 from collections.abc import Iterable
 
-def get_optimizer(optimizer_name : str, model_parameters : Iterable[torch.nn.Parameter], lr : float, weight_decay : float=0.0) -> torch.optim.Optimizer:
+def get_optimizer(optimizer_name : str, model_parameters : Iterable[torch.nn.Parameter], lr : float, weight_decay : float = 0.0) -> torch.optim.Optimizer:
     """
     Получение настроенного оптимизатора по его названию, параметрам модели и параметрам оптимизатора.
     Args:

@@ -1,18 +1,12 @@
-
-
 import pandas as pd
-from sklearn.compose import ColumnTransformer
-
+import torch
 from torch.utils.data import TensorDataset, DataLoader
-
-from dl_models.mlp import MLP
-
+from sklearn.compose import ColumnTransformer
 from config import config as cfg
+from dl_models.mlp import MLP
+from train.fit_nn import fit_nn
 from optimizer import get_optimizer
 from preprocessing import build_preprocessor
-import torch
-
-from train.fit_nn import fit_nn
 
 
 def train_mlp_fold(
@@ -30,14 +24,13 @@ def train_mlp_fold(
         optimizer_name : str = 'adam',
         activation_func : str = 'relu',
         X_val : pd.DataFrame | None = None,
-        y_val : pd.DataFrame | None = None,
+        y_val : pd.Series | None = None,
         ) -> tuple[MLP, ColumnTransformer, dict, dict, int]:
     """
     Функция обучения и валидации MLP модели с переданными параметрами.
     Подготавливает данные и обучает MLP на переданном разбиении с необязательной валидацией.
     Валидация проводится только при переданных X_val, y_val.
-    При включенном early stopping и наличии валидации восстанавливает лучшее сохраненное состояние по validation loss с учетом
-    минимального улучшения 0.0001.
+    При включенном early stopping и наличии валидации восстанавливает лучшее сохраненное состояние по best validation accuracy.
     Args:
         X_train : данные для обучения
         y_train : ответы к данным для обучения
@@ -59,7 +52,7 @@ def train_mlp_fold(
         preprocessor : обученный препроцессор
         history : история train loss, и при наличии валидации, val_loss и accuracy
         checkpoint : словарь с состоянием модели и настройками архитектуры
-        best_epoch : индекс выбранной эпохи, начиная с 0; -1 если ранней остановки не было
+        best_epoch : индекс выбранной эпохи, начиная с 0; -1 если early stopping отключен или нет валидации
     """
 
     device = cfg.general.device
@@ -74,7 +67,7 @@ def train_mlp_fold(
 
     if X_val is not None and y_val is not None:
         X_val = preprocessor.transform(X_val).astype('float32')
-        X_val = (torch.from_numpy(X_val).to(device), ) # для нормальной работы с fit_nn
+        X_val = (torch.from_numpy(X_val).to(device), ) # fit_nn принимает входы кортежем
         y_val = torch.from_numpy(y_val.to_numpy(dtype='float32')).reshape(-1, 1).to(device)
 
     train_dataset = TensorDataset(X_train, y_train)

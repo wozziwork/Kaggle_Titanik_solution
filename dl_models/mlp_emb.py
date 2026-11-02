@@ -56,6 +56,9 @@ class MLPEmb(nn.Module):
         self.network = nn.Sequential(*layers)
 
     def forward(self, X_num : Tensor, X_cat : Tensor) -> Tensor:
+        """
+        Forward pass. На выходе тензор логитов размера [N, 1]
+        """
         # Получаем значения из таблицы эмбеддингов для каждого категориального признака.
         # Затем соединяем с числовыми признаками
         embedded = []

@@ -4,20 +4,25 @@ from omegaconf import OmegaConf
 
 config = {
     'general' : {
-        'experiment_name' : 'all_progon',
+        'experiment_name' : 'TEST',
         'seed' : 67,
         'train' : True,
-        'inference' : False,
+        'inference' : True, # модели для инференса указываются в разделе inference
+        'train_dl_on_all_data' : True, # если нужно получить и сохранить модель, иначе для dl моделей просто проводится поиск или cv
         'save_models' : False,
         'save_logs' : False,
-        'boosting_verbose' : 0,
-        'device' : 'cpu',
-        'show_graphs' : True
+        'show_logs' : False,
+        'device' : 'cpu', # cuda будет работать только если скачать torch с cuda
+        'boosting_verbose': 0,
+        'show_graphs' : False,
+        'save_oof' : False,
     },
     'paths' : {
         'TRAIN_PATH' : Path(__file__).resolve().parent / "data" / "train.csv",
         'TEST_PATH' : Path(__file__).resolve().parent / "data" / "test.csv",
-        'MODELS_DIR' : Path(__file__).resolve().parent / "saved_models"
+        'MODELS_DIR' : Path(__file__).resolve().parent / "saved_models",
+        'OOF_PROBS' : Path(__file__).resolve().parent / "oof_probs" / "oof_probs_FINAL.csv",
+        'INFERENCE' : Path(__file__).resolve().parent / "inference_predicts",
     },
     'dataset' : {
         'dropped_columns' : ['PassengerId', 'Ticket', 'Name', 'Cabin'],
@@ -74,7 +79,7 @@ config = {
             'cat_features' : ['Sex', 'Embarked', 'Pclass', 'Title'],
             'verbose' : '${general.boosting_verbose}',
             'thread_count': 1,
-            'early_stopping_rounds' : 40,
+            'early_stopping_rounds' : 80,
             'use_best_model' : True,
             'iterations' : 500,
             'max_depth' : 6,
@@ -91,7 +96,7 @@ config = {
             'early_stopping_rounds' : 80,
             'tree_method' : 'hist',
             'eval_metric' : 'logloss',
-            'n_estimators' : 1000,
+            'n_estimators' : 200,
             'learning_rate' : 0.05,
             'max_depth' : 6,
             'reg_lambda' : 1.0,
@@ -101,23 +106,23 @@ config = {
             'gamma' : 0.,
             'min_child_weight' : 1,
         },
-        'lightgbm' : {
+        'lgbm' : {
             'random_state': '${general.seed}',
             'verbosity': -1,
             'n_jobs': 1,
             'early_stopping_round' : 80,
             'learning_rate': 0.05,
             'num_leaves' : 17,
-            'n_estimators': 1000,
+            'n_estimators': 200,
             'reg_lambda' : 1.0,
             'min_child_samples' : 22,
             'subsample' : 1.,
         },
         'mlp' : {
-            'hidden_dims' : [32,32,32],
+            'hidden_dims' : [128, 128],
             'batch_norm' : True,
-            'dropout' : 0.,
-            'activation_func' : 'leacky_relu'
+            'dropout' : 0.3125,
+            'activation_func' : 'relu'
         },
         'mlp_emb' : {
             'hidden_dims' : [128, 128],
@@ -125,26 +130,32 @@ config = {
             'batch_norm': True,
             'dropout': 0.3125,
             'activation_func': 'relu'
+        },
+        'stacking': {
+            'alpha' : 10,
+            'catboost_iterations' : 100,
+            'lgbm_n_estimators' : 55,
+            'cv' : True # флаг проведения кросс-валидации
         }
     },
     'dl_train' : {
         'mlp' : {
             'num_workers' : 0,
-            'epochs' : 400,
-            'batch_size' : 64,
+            'epochs' : 4,
+            'batch_size' : 24,
             'lr' : 0.00217,
-            'optimizer_name': 'adam',
-            'weight_decay': 0.01,
-            'early_stopping_patience' : 10,
+            'optimizer_name': 'adamw',
+            'weight_decay': 0.26,
+            'early_stopping_patience' : 0,
         },
         'mlp_emb' : {
             'num_workers': 0,
-            'epochs': 400,
+            'epochs': 12,
             'batch_size': 24,
-            'lr': 0.002,
+            'lr': 0.00217,
             'optimizer_name': 'adamw',
             'weight_decay': 0.26,
-            'early_stopping_patience': 10,
+            'early_stopping_patience': 0,
         }
     },
     'search' : {
@@ -185,7 +196,7 @@ config = {
             'model__colsample_bytree': [0.6, 0.7, 0.8, 1],
             'model__gamma' : [0, 0.1, 0.5, 1.]
         },
-        'lightgbm': {
+        'lgbm': {
             'model__num_leaves': [16],
             'model__learning_rate': [0.05],
             'model__min_child_samples': [22],
@@ -195,7 +206,6 @@ config = {
             'model__colsample_bytree': [1.0],
         },
         'mlp': {
-
             'hidden_dims': [[32,32,32]],
             'dropout': [0.0, 0.1, 0.2, 0.3, 0.4, 0.5],
             'lr': [0.002],
@@ -221,11 +231,15 @@ config = {
         'knn' : False,
         'decision_tree' : False,
         'random_forest' : False,
-        'catboost' : False,
+        'catboost' : True,
         'xgboost' : False,
-        'lightgbm' : False,
+        'lgbm' : True,
         'mlp' : False,
         'mlp_emb' : True,
+        'mlp_emb_fold_ensemble' : False,
+        'voting' : True,
+        'averaging': False,
+        'stacking' : False,
     },
     'to_grid_search' : {
         'logistic_regression' : False,
@@ -234,26 +248,46 @@ config = {
         'random_forest' : False,
         'catboost' : False,
         'xgboost' : False,
-        'lightgbm' : False,
+        'lgbm' : False,
         'mlp' : False,
         'mlp_emb' : False,
     },
     'inference' : {
-          'logistic_regression' : 'baseline_logistic_regression',
+        'logistic_regression' : 'baseline_logistic_regression',
+        'knn' : 'FINAL_knn',
+        'decision_tree' : 'FINAL_decision_tree',
+        'random_forest' : 'FINAL_random_forest',
+        'catboost' : 'FINAL_catboost',
+        'xgboost' : 'FINAL_xgboost',
+        'lgbm' : 'FINAL_lgbm',
+        'mlp' : 'FINAL_mlp',
+        'mlp_emb' : 'FINAL_mlp_emb',
+        'mlp_emb_fold_ensemble' : 'FINAL_mlp_emb',
+        'voting' : {
+            'catboost' : 'FINAL_catboost',
+            'lgbm' : 'FINAL_lgbm',
+            'mlp_emb' : 'FINAL_mlp_emb',
+        },
+        'stacking' : {
+            'ridge' : 'FINAL_meta_model_ridge',
+        },
     },
     'to_inference' : {
         'logistic_regression' : False,
         'knn' : False,
         'decision_tree' : False,
         'random_forest' : False,
-        'catboost' : False,
+        'catboost' : True,
         'xgboost' : False,
+        'lgbm' : False,
         'mlp' : False,
-        'mlp_emb' : False,
+        'mlp_emb' : True,
+        'voting': True,
+        'averaging': False,
+        'stacking': False,
+        'mlp_emb_fold_ensemble': False,
     }
-
 }
-
 
 config = OmegaConf.create(config)
 

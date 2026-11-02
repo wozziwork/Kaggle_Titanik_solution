@@ -2,6 +2,10 @@ import matplotlib.pyplot as plt
 
 
 def show_results_plot(history, fold_n=None):
+    """
+    Выводит историю обучения по эпохам
+    По оси X - номер эпохи, по оси y - значение loss или метрики
+    """
     for metric_name, values  in history.items():
         plt.figure()
         title = f'Fold {fold_n}' if fold_n else metric_name

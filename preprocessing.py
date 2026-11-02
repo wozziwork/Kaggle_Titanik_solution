@@ -6,7 +6,7 @@ from sklearn.impute import SimpleImputer
 from sklearn.preprocessing import OneHotEncoder, OrdinalEncoder
 from sklearn.preprocessing import StandardScaler
 from sklearn.pipeline import Pipeline
-from sklearn.preprocessing import FunctionTransformer
+import torch
 
 from config import config as cfg
 
@@ -14,7 +14,10 @@ from config import config as cfg
 def build_preprocessor(scale_numeric : bool = True, sparse_output : bool = True) -> ColumnTransformer:
     """
     Создает препроцессор для числовых и категориальных признаков
-
+    Args:
+        scale_numeric : флаг, отвечающий за наличие стандартизации
+        sparse_output : флаг, отвечающий за формат выхода OneHotEncoder.
+            True - разреженная матрица, False - обычный numpy массив
     Returns: необученный настроенный ColumnTransformer
     """
 
@@ -44,7 +47,6 @@ def build_catboost_preprocessor() -> ColumnTransformer:
     """
     Создает препроцессор для catboost, заполняющий пропуски в категориальных признаках.
     Остальные столбцы передаются без преобразований.
-
     Returns: необученный настроенный ColumnTransformer, возвращающий DataFrame после трансформации
     """
 
@@ -93,8 +95,12 @@ class CategoryCaster(TransformerMixin, BaseEstimator):
 def build_category_caster_preprocessor() -> CategoryCaster:
     return CategoryCaster(list(cfg.dataset.categorical_columns))
 
-def embedding_preprocessor():
-
+def build_embedding_preprocessor() -> ColumnTransformer:
+    """
+    Создает препроцессор для MLPEmb.
+    Заполняет пропуски, стандартизует числовые признаки и кодирует категории целочисленными индексами.
+    Returns: необученный настроенный ColumnTransformer, возвращающий NumPy-массив после трансформации
+    """
     numerical_processing = Pipeline([
         ('imputer', SimpleImputer(strategy=cfg.preprocessing.numeric.strategy)),
         ('scaler', StandardScaler()),
@@ -118,3 +124,14 @@ def embedding_preprocessor():
         ]
     )
     return preprocessor
+
+def prepare_embedding_inputs(X_processed, device):
+    """
+    Разбивает X_processed на два тензора, содержащих по порядку сначала численные(float32),
+        а затем закодированные категориальные признаки(int32)
+    Ко всем значениям категориальных признаков добавляется 1 (под неизвестную категорию)
+    """
+    n_num = len(cfg.dataset.numeric_columns)
+    X_num = torch.from_numpy(X_processed[:, :n_num].astype('float32')).to(device)
+    X_cat = torch.from_numpy(X_processed[:, n_num:].astype('int32') + 1).to(device)
+    return X_num, X_cat

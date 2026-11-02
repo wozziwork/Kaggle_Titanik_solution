@@ -24,7 +24,7 @@ def fit_nn(
         ) -> tuple[MLP | MLPEmb, dict, int]:
     """
     Выполняет обучение переданной нейросети с необязательной валидацией.
-    При наличии валидации и early stopping восстанавливает лучшее сохраненное состояние по validation_loss
+    При наличии валидации и early stopping восстанавливает лучшее сохраненное состояние по validation accuracy
     early_stopping_patience = 0 отключает и early_stopping, и выбор лучшего состояния
     Args:
         model : созданная модель с настроенной архитектурой
@@ -32,7 +32,7 @@ def fit_nn(
         optimizer : оптимизатор, связанный с параметрами переданной модели
         loss_fn : лосс-функция
         epochs : максимальное количество эпох обучения
-        early_stopping_patience : число эпох подряд без уменьшения лучшего val_loss более чем на 0.0001
+        early_stopping_patience : число эпох подряд без улучшения validation accuracy
         device : наименование устройства, на котором будет проходить обучение
         val_inputs : кортеж тензоров с валидационными данными
         y_val : тензор с правильными ответами для валидационных данных
@@ -46,12 +46,15 @@ def fit_nn(
         y_val = y_val.to(device)
 
     history = defaultdict(list)
-    min_val_loss = float('inf')
+    best_val_acc = -1
     best_model_state = None
     failed_epochs = 0
     best_epoch = -1
 
-    progress = tqdm(range(epochs), desc='Обучение MLP')
+    if isinstance(model, MLP): model_name = 'MLP'
+    else: model_name = 'MLPEmb'
+
+    progress = tqdm(range(epochs), desc=f'Обучение {model_name}')
     for epoch in progress:
         model.train()
         train_loss_sum = 0
@@ -88,16 +91,15 @@ def fit_nn(
                 )
 
                 if early_stopping_patience:
-                    if val_loss.item() < min_val_loss - 0.0001:
+                    if accuracy > best_val_acc:
                         failed_epochs = 0
-                        min_val_loss = val_loss.item()
+                        best_val_acc = accuracy
                         best_model_state = copy.deepcopy(model.state_dict())
                         best_epoch = epoch
                     else:
                         failed_epochs += 1
                         if failed_epochs >= early_stopping_patience:
                             break
-
     if best_model_state is not None:
         model.load_state_dict(best_model_state)
 

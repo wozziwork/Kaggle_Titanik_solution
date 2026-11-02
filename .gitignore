@@ -1,5 +1,9 @@
 .venv
-/data/gender_submission.csv
 .idea/
 AGENTS.MD
 .agents
+/catboost_info
+__pycache__/
+*.py[cod]
+.venv-check/
+.ipynb_checkpoints/

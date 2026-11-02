@@ -1,4 +1,3 @@
-
 import pandas as pd
 
 from omegaconf import OmegaConf
@@ -14,9 +13,10 @@ from catboost import CatBoostClassifier
 from lightgbm import LGBMClassifier
 from xgboost import XGBClassifier
 
-from validation import (
-    build_scoring, build_cv, build_grid_search, evaluate_model_cv, grid_search_summary, run_boosting_experiment
-)
+from validation.general import build_scoring, build_cv, build_grid_search
+from validation.classic import evaluate_model_cv, grid_search_summary
+from validation.boosting import run_boosting_experiment, get_boosting_oof
+
 from preprocessing import build_preprocessor, build_catboost_preprocessor, build_category_caster_preprocessor
 from artifacts import save_model, save_experiment_log
 from dataset import Dataset
@@ -72,23 +72,29 @@ def search_and_fit(model : Pipeline, data : Dataset, model_name : str) -> tuple[
 
 
 
-def train(data : Dataset) -> dict[str, Pipeline]:
+def train(data : Dataset) -> tuple[dict[str, Pipeline], dict, dict]:
     """
     Создает, оценивает и обучает модели, выбранные в конфиге
     Args:
         data: датасет с X_train и y_train
     Returns:
         trained_models: словарь {имя_модели : обученный пайплайн}
+        oof_probs : словарь с предсказанными oof вероятностями (только для catboost и lgbm)
+        cv_scores : словарь {имя_модели: средняя accuracy на кросс-валидации}.
+            Заполняется только для моделей, обучаемых без grid search
     """
     trained_models = {}
+    oof_probs = {}
     results = {}
+    cv_scores = {}
 
     if cfg.to_train.logistic_regression:
         model_name  = 'logistic_regression'
         base_preprocessor = build_preprocessor()
+        model = LogisticRegression(**cfg.models.logistic_regression)
         logreg = Pipeline([
             ('preprocessor', base_preprocessor),
-            ('model', LogisticRegression(**cfg.models.logistic_regression)),
+            ('model', model),
         ])
 
         if cfg.to_grid_search.logistic_regression:
@@ -99,18 +105,17 @@ def train(data : Dataset) -> dict[str, Pipeline]:
                 experiment_results = grid_search_summary(experiment_results, best_index)
         else:
             logreg, experiment_results = fit_and_evaluate(logreg, data)
-
+            cv_scores[model_name] = experiment_results.loc['mean', 'test_accuracy']
         trained_models[model_name] = logreg
         results[model_name] = experiment_results
-
-
 
     if cfg.to_train.knn:
         base_preprocessor = build_preprocessor()
         model_name = 'knn'
+        model = KNeighborsClassifier(**cfg.models.knn)
         knn = Pipeline([
             ('preprocessor', base_preprocessor),
-            ('model', KNeighborsClassifier(**cfg.models.knn)),
+            ('model', model),
         ])
 
         if cfg.to_grid_search.knn:
@@ -121,16 +126,17 @@ def train(data : Dataset) -> dict[str, Pipeline]:
                 experiment_results = grid_search_summary(experiment_results, best_index)
         else:
             knn, experiment_results = fit_and_evaluate(knn, data)
-
+            cv_scores[model_name] = experiment_results.loc['mean', 'test_accuracy']
         trained_models[model_name] = knn
         results[model_name] = experiment_results
 
     if cfg.to_train.decision_tree:
         base_preprocessor = build_preprocessor(scale_numeric=False)
         model_name = 'decision_tree'
+        model = DecisionTreeClassifier(**cfg.models.decision_tree)
         decision_tree = Pipeline([
             ('preprocessor', base_preprocessor),
-            ('model', DecisionTreeClassifier(**cfg.models.decision_tree)),
+            ('model', model),
         ])
 
         if cfg.to_grid_search.decision_tree:
@@ -141,15 +147,18 @@ def train(data : Dataset) -> dict[str, Pipeline]:
                 experiment_results = grid_search_summary(experiment_results, best_index)
         else:
             decision_tree, experiment_results = fit_and_evaluate(decision_tree, data)
+            cv_scores[model_name] = experiment_results.loc['mean', 'test_accuracy']
         trained_models[model_name] = decision_tree
         results[model_name] = experiment_results
+
 
     if cfg.to_train.random_forest:
         base_preprocessor = build_preprocessor(scale_numeric=False)
         model_name = 'random_forest'
+        model = RandomForestClassifier(**cfg.models.random_forest)
         random_forest = Pipeline([
             ('preprocessor', base_preprocessor),
-            ('model', RandomForestClassifier(**cfg.models.random_forest)),
+            ('model', model),
         ])
 
         if cfg.to_grid_search.random_forest:
@@ -158,6 +167,7 @@ def train(data : Dataset) -> dict[str, Pipeline]:
                 experiment_results = grid_search_summary(experiment_results, best_index)
         else:
             random_forest, experiment_results = fit_and_evaluate(random_forest, data)
+            cv_scores[model_name] = experiment_results.loc['mean', 'test_accuracy']
         trained_models[model_name] = random_forest
         results[model_name] = experiment_results
 
@@ -166,15 +176,21 @@ def train(data : Dataset) -> dict[str, Pipeline]:
         # преобразуем cat_features в кортеж для совместимости клонирования модели
         catboost_params = OmegaConf.to_container(cfg.models.catboost, resolve=True)
         catboost_params['cat_features'] = tuple(catboost_params['cat_features'])
+        if catboost_params['early_stopping_rounds'] <= 0:
+            catboost_params.pop('early_stopping_rounds')
+            catboost_params['use_best_model'] = False
 
         catboost = CatBoostClassifier(**catboost_params)
         catboost_preprocessor = build_catboost_preprocessor()
 
         catboost, experiment_results, chosen_iterations = run_boosting_experiment(model_name, catboost, data, build_catboost_preprocessor)
+        if not cfg.to_grid_search[model_name]: cv_scores[model_name] = experiment_results.loc['mean', 'val_accuracy']
 
         # Обучаем на всех тренировочных данных без eval_set
         # число итераций выбрано по CV, поэтому early stopping отключаем.
         catboost.set_params(early_stopping_rounds=None, use_best_model=False, iterations=chosen_iterations)
+        oof_probs[model_name] = get_boosting_oof(catboost, data.X_train, data.y_train)
+
         X_train = catboost_preprocessor.fit_transform(data.X_train)
         y_train = data.y_train
 
@@ -194,10 +210,11 @@ def train(data : Dataset) -> dict[str, Pipeline]:
         xgboost_preprocessor = build_category_caster_preprocessor()
 
         xgboost, experiment_results, chosen_iterations = run_boosting_experiment(model_name, xgboost, data, build_category_caster_preprocessor)
-
+        if not cfg.to_grid_search[model_name]: cv_scores[model_name] = experiment_results.loc['mean', 'val_accuracy']
         # Обучаем на всех тренировочных данных без eval_set
         # число итераций выбрано по CV, поэтому early stopping отключаем.
         xgboost.set_params(early_stopping_rounds=None, n_estimators=chosen_iterations)
+
         X_train = xgboost_preprocessor.fit_transform(data.X_train)
         y_train = data.y_train
 
@@ -210,17 +227,20 @@ def train(data : Dataset) -> dict[str, Pipeline]:
         trained_models[model_name] = xgboost
         results[model_name] = experiment_results
 
-    if cfg.to_train.lightgbm:
-        model_name = 'lightgbm'
-        lgbm_params = OmegaConf.to_container(cfg.models.lightgbm, resolve=True)
+    if cfg.to_train.lgbm:
+        model_name = 'lgbm'
+        lgbm_params = OmegaConf.to_container(cfg.models.lgbm, resolve=True)
         lgbm = LGBMClassifier(**lgbm_params)
         lgbm_preprocessor = build_category_caster_preprocessor()
 
         lgbm, experiment_results, chosen_iterations = run_boosting_experiment(model_name, lgbm, data, build_category_caster_preprocessor)
+        if not cfg.to_grid_search[model_name]: cv_scores[model_name] = experiment_results.loc['mean', 'val_accuracy']
 
         # Обучаем на всех тренировочных данных без eval_set
         # число итераций выбрано по CV, поэтому early stopping отключаем.
         lgbm.set_params(early_stopping_round=0, n_estimators=chosen_iterations)
+        oof_probs[model_name] = get_boosting_oof(lgbm, data.X_train, data.y_train)
+
         X_train = lgbm_preprocessor.fit_transform(data.X_train)
         y_train = data.y_train
 
@@ -241,9 +261,10 @@ def train(data : Dataset) -> dict[str, Pipeline]:
         for model_name, model in trained_models.items():
             save_experiment_log(model, results[model_name], model_name)
 
-    for model_name, experiment_results in results.items():
-        print(f'Result for {model_name}')
-        print(pd.DataFrame(experiment_results).to_string() + '\n')
+    if cfg.general.show_logs:
+        for model_name, experiment_results in results.items():
+            print(f'Result for {model_name}')
+            print(pd.DataFrame(experiment_results).to_string() + '\n')
 
 
-    return trained_models
+    return trained_models, oof_probs, cv_scores

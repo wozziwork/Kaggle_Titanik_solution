@@ -39,5 +39,8 @@ class MLP(nn.Module):
         self.network = nn.Sequential(*layers)
 
     def forward(self, X : Tensor) -> Tensor:
+        """
+        Forward pass. На выходе тензор логитов размера [N, 1]
+        """
         X = self.network(X)
         return X

@@ -1,6 +1,5 @@
 import pandas as pd
 from config import config as cfg
-import numpy as np
 
 class Dataset:
     """
