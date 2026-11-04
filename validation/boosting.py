@@ -32,7 +32,7 @@ def evaluate_boosting_cv(
         build_preprocessor_func : Callable[[], ColumnTransformer | CategoryCaster],
     ) -> list[dict]:
     """
-    Кросс-валидация для бустингов с early stopping.
+    Кросс-валидация для бустингов с возможным early stopping. При включенном early stopping оценка может быть слишком оптимистичной.
     Args:
         boosting_model: исходная модель, клонируемая для каждого фолда
         data: данные для обучения и валидации
