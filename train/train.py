@@ -91,13 +91,13 @@ def train(data : Dataset) -> tuple[dict[str, Pipeline], dict, dict]:
     if cfg.to_train.logistic_regression:
         model_name  = 'logistic_regression'
         base_preprocessor = build_preprocessor()
-        model = LogisticRegression(**cfg.models.logistic_regression)
+        model = LogisticRegression(**cfg.models[model_name])
         logreg = Pipeline([
             ('preprocessor', base_preprocessor),
             ('model', model),
         ])
 
-        if cfg.to_grid_search.logistic_regression:
+        if cfg.to_grid_search[model_name]:
             logreg, experiment_results, best_index = search_and_fit(logreg, data, model_name)
 
             # саммари отображает mean по каждой метрике из конфига (для лучшего эксперимента)
@@ -112,15 +112,14 @@ def train(data : Dataset) -> tuple[dict[str, Pipeline], dict, dict]:
     if cfg.to_train.knn:
         base_preprocessor = build_preprocessor()
         model_name = 'knn'
-        model = KNeighborsClassifier(**cfg.models.knn)
+        model = KNeighborsClassifier(**cfg.models[model_name])
         knn = Pipeline([
             ('preprocessor', base_preprocessor),
             ('model', model),
         ])
 
-        if cfg.to_grid_search.knn:
+        if cfg.to_grid_search[model_name]:
             knn, experiment_results, best_index = search_and_fit(knn, data, model_name)
-
             # саммари отображает mean по каждой метрике из конфига (для лучшего эксперимента)
             if cfg.search.summarize_results:
                 experiment_results = grid_search_summary(experiment_results, best_index)
@@ -133,13 +132,13 @@ def train(data : Dataset) -> tuple[dict[str, Pipeline], dict, dict]:
     if cfg.to_train.decision_tree:
         base_preprocessor = build_preprocessor(scale_numeric=False)
         model_name = 'decision_tree'
-        model = DecisionTreeClassifier(**cfg.models.decision_tree)
+        model = DecisionTreeClassifier(**cfg.models[model_name])
         decision_tree = Pipeline([
             ('preprocessor', base_preprocessor),
             ('model', model),
         ])
 
-        if cfg.to_grid_search.decision_tree:
+        if cfg.to_grid_search[model_name]:
             decision_tree, experiment_results, best_index = search_and_fit(decision_tree, data, model_name)
 
             # саммари отображает mean по каждой метрике из конфига (для лучшего эксперимента)
@@ -155,13 +154,13 @@ def train(data : Dataset) -> tuple[dict[str, Pipeline], dict, dict]:
     if cfg.to_train.random_forest:
         base_preprocessor = build_preprocessor(scale_numeric=False)
         model_name = 'random_forest'
-        model = RandomForestClassifier(**cfg.models.random_forest)
+        model = RandomForestClassifier(**cfg.models[model_name])
         random_forest = Pipeline([
             ('preprocessor', base_preprocessor),
             ('model', model),
         ])
 
-        if cfg.to_grid_search.random_forest:
+        if cfg.to_grid_search[model_name]:
             random_forest, experiment_results, best_index = search_and_fit(random_forest, data, model_name)
             if cfg.search.summarize_results:
                 experiment_results = grid_search_summary(experiment_results, best_index)
@@ -174,7 +173,7 @@ def train(data : Dataset) -> tuple[dict[str, Pipeline], dict, dict]:
     if cfg.to_train.catboost:
         model_name = 'catboost'
         # преобразуем cat_features в кортеж для совместимости клонирования модели
-        catboost_params = OmegaConf.to_container(cfg.models.catboost, resolve=True)
+        catboost_params = OmegaConf.to_container(cfg.models[model_name], resolve=True)
         catboost_params['cat_features'] = tuple(catboost_params['cat_features'])
         if catboost_params['early_stopping_rounds'] <= 0:
             catboost_params.pop('early_stopping_rounds')
@@ -205,7 +204,7 @@ def train(data : Dataset) -> tuple[dict[str, Pipeline], dict, dict]:
 
     if cfg.to_train.xgboost:
         model_name = 'xgboost'
-        xgboost_params = OmegaConf.to_container(cfg.models.xgboost, resolve=True)
+        xgboost_params = OmegaConf.to_container(cfg.models[model_name], resolve=True)
         xgboost = XGBClassifier(**xgboost_params)
         xgboost_preprocessor = build_category_caster_preprocessor()
 
@@ -229,7 +228,7 @@ def train(data : Dataset) -> tuple[dict[str, Pipeline], dict, dict]:
 
     if cfg.to_train.lgbm:
         model_name = 'lgbm'
-        lgbm_params = OmegaConf.to_container(cfg.models.lgbm, resolve=True)
+        lgbm_params = OmegaConf.to_container(cfg.models[model_name], resolve=True)
         lgbm = LGBMClassifier(**lgbm_params)
         lgbm_preprocessor = build_category_caster_preprocessor()
 
