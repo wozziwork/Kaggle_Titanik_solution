@@ -75,9 +75,9 @@ def ensemble_experiment(dataset : Dataset, oof_probs : dict) -> None:
         oof_probs :словарь, содержащий предсказанные базовыми моделями oof вероятности (если они обучались)
     """
     if cfg.to_train.voting or cfg.to_train.stacking or cfg.to_train.averaging:
-        # Если 3 базовые модели ансамбля обучаются, то
+        # Если 3 базовые модели ансамбля обучаются (без Grid Search для MLPEmb), то
         # согласно конфигу происходит формирование и сохранение таблицы или только формирование (без сохранения)
-        if all([cfg.to_train.catboost, cfg.to_train.lgbm, cfg.to_train.mlp_emb]):
+        if all([cfg.to_train.catboost, cfg.to_train.lgbm, cfg.to_train.mlp_emb]) and not cfg.to_grid_search.mlp_emb:
             if cfg.general.save_oof:
                 oof_res = save_oof_predictions(dataset, oof_probs, cfg.paths.OOF_PROBS)
             else:
