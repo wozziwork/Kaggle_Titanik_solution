@@ -88,6 +88,13 @@ def train(data : Dataset) -> tuple[dict[str, Pipeline], dict, dict]:
     results = {}
     cv_scores = {}
 
+    need_oof = (
+            (cfg.to_train.voting or cfg.to_train.averaging or cfg.to_train.stacking)
+            and cfg.to_train.catboost
+            and cfg.to_train.lgbm
+            and cfg.to_train.mlp_emb
+    )
+
     if cfg.to_train.logistic_regression:
         model_name  = 'logistic_regression'
         base_preprocessor = build_preprocessor()
@@ -188,7 +195,8 @@ def train(data : Dataset) -> tuple[dict[str, Pipeline], dict, dict]:
         # Обучаем на всех тренировочных данных без eval_set
         # число итераций выбрано по CV, поэтому early stopping отключаем.
         catboost.set_params(early_stopping_rounds=None, use_best_model=False, iterations=chosen_iterations)
-        oof_probs[model_name] = get_boosting_oof(catboost, data.X_train, data.y_train)
+        if need_oof:
+            oof_probs[model_name] = get_boosting_oof(catboost, data.X_train, data.y_train)
 
         X_train = catboost_preprocessor.fit_transform(data.X_train)
         y_train = data.y_train
@@ -238,7 +246,8 @@ def train(data : Dataset) -> tuple[dict[str, Pipeline], dict, dict]:
         # Обучаем на всех тренировочных данных без eval_set
         # число итераций выбрано по CV, поэтому early stopping отключаем.
         lgbm.set_params(early_stopping_round=0, n_estimators=chosen_iterations)
-        oof_probs[model_name] = get_boosting_oof(lgbm, data.X_train, data.y_train)
+        if need_oof:
+            oof_probs[model_name] = get_boosting_oof(lgbm, data.X_train, data.y_train)
 
         X_train = lgbm_preprocessor.fit_transform(data.X_train)
         y_train = data.y_train
