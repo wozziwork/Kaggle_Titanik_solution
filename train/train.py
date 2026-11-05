@@ -88,12 +88,8 @@ def train(data : Dataset) -> tuple[dict[str, Pipeline], dict, dict]:
     results = {}
     cv_scores = {}
 
-    need_oof = (
-            (cfg.to_train.voting or cfg.to_train.averaging or cfg.to_train.stacking)
-            and cfg.to_train.catboost
-            and cfg.to_train.lgbm
-            and cfg.to_train.mlp_emb
-    )
+    need_oof = ((cfg.to_train.voting or cfg.to_train.averaging or cfg.to_train.stacking)
+            and cfg.to_train.catboost and cfg.to_train.lgbm and cfg.to_train.mlp_emb and cfg.to_grid_search.mlp_emb == False)
 
     if cfg.to_train.logistic_regression:
         model_name  = 'logistic_regression'
